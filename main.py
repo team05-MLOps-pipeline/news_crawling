@@ -173,8 +173,9 @@ def send_info(cats, url_lists, today, words_to_search):
             ##작성일자
             #media_end_head_info_datestamp_time _ARTICLE_DATE_TIME
             try:
-                createDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME")
-                createDate_val = createDate.text
+                createDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME")['data-date-time']
+                #createDate_val = convert_date(createDate.text)
+                createDate_val = createDate
             except:
                 continue
                 #createDate_val = None
@@ -257,7 +258,7 @@ def send_info(cats, url_lists, today, words_to_search):
                     'content': text_list,
                     'themes': themes_data,
                 }
-            producer.send('news_crawling', value=news_data)
+            producer.send('news_test3', value=news_data)
 
 
 
