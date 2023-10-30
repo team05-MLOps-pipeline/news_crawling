@@ -1,44 +1,40 @@
 from kafka import KafkaProducer
-from json import dumps
+import json 
 import time
+import logging
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from datetime import datetime
+import os
+from tqdm import tqdm
+import re
+import random
+from hdfs import InsecureClient
+import pandas as pd
+import concurrent.futures
+
 
 producer = KafkaProducer(acks=0,
                          compression_type='gzip',
-                         bootstrap_servers=['13.209.5.85:9094'],
-                         value_serializer=lambda x:dumps(x).encode('utf-8'),
+                         bootstrap_servers=['kafka:9092'],
+                         value_serializer=lambda x:json.dumps(x).encode('utf-8'),
                           api_version=(2,)
                          )
 
 
-
-import logging
-
-
-import requests
-from bs4 import BeautifulSoup
-import json
-import pandas as pd
-from datetime import datetime
-import time
-import os
-from tqdm import tqdm
-import re
-# import mysql.connector
-import random
-
 # 로그 생성
 logger = logging.getLogger()
-
 # 로그의 출력 기준 설정
 logger.setLevel(logging.INFO)
-
 # log 출력 형식
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
 # log를 console에 출력
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
+
+
 
 """
 100 : 정치
@@ -50,13 +46,6 @@ logger.addHandler(stream_handler)
 """
 
 
-##오늘날짜얻기
-today = datetime.today().strftime('%Y%m%d')
-#print(today)
-
-cats = [100, 101, 102, 103 ,104, 105]
-last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
-
 ##data 폴더 생성
 try:
     if not os.path.exists("data"):
@@ -64,10 +53,22 @@ try:
 except OSError:
     logger.info('Error: Creating directory. ' +  "data")
 
+crawling_first = True
 
 def cleanText(readData):
-  return re.sub(" {2,}", ' ', re.sub("[\t\n\v\f\r]", '', readData))
+  return re.sub(" {2,}", ' ', re.sub("[^\w\s\t\n\v\f\r]", '', readData))
 
+def convert_date(kr_date_str):
+    # "2023.10.13. 오후 1:09" --> "2023-10-13 13:09"
+    date_str, am_pm, time_str = kr_date_str.split()
+    hour, minute = map(int, time_str.split(':'))
+
+    if am_pm == "오후" and hour < 12:
+        hour += 12
+    elif am_pm == '오전' and hour == 12:
+        hour = 0
+
+    return f"{date_str.replace('.', '-')} {hour:02d}:{minute:02d}:00"
 
 def generate_weighted_random_number(min, max):
     # 0.5에서 1.5 사이에서 소수점 둘째 자리까지 랜덤 숫자 생성
@@ -75,14 +76,14 @@ def generate_weighted_random_number(min, max):
 
     # 0.5가 더 자주 나오게 하기 위해 조절된 확률 사용
     if random.random() < 0.7:  # 예시로 0.5가 더 자주 나오도록 조절 (0.7은 실험에 따라 조절 가능)
-        return 1.1
+        return 0.4
     else:
-        if random.random() < 0.99:
+        if random.random() < 0.999:
             return random_number
         else:
             return 3
 
-def make_urllist(cat, date):
+def make_urllist(cat, date, re):
     global last_url
     page_num = 0
     first_url = ""
@@ -90,7 +91,7 @@ def make_urllist(cat, date):
     first_flag = 0
     last_flag = 0
 
-    for i in range(10):
+    for i in range(re):
         url = 'https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1='+str(cat)+'&date='+str(date)+'&page='+str(i+1)
         headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.90 Safari/537.36'}
         news = requests.get(url, headers=headers)
@@ -130,12 +131,12 @@ def make_urllist(cat, date):
         if len(news_list) < 20:
             break
 
-        time.sleep(generate_weighted_random_number(0.8, 1.4))
+        time.sleep(generate_weighted_random_number(0.8, 1.2))
 
     return urllist
 
 
-def send_info(cats, url_lists, today):
+def send_info(cats, url_lists, today, words_to_search):
     global last_url
     # cat 값에 따라 url_list에 접근
     for cat in tqdm(cats):
@@ -177,8 +178,9 @@ def send_info(cats, url_lists, today):
             ##작성일자
             #media_end_head_info_datestamp_time _ARTICLE_DATE_TIME
             try:
-                createDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME")
-                createDate_val = createDate.text
+                createDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME")['data-date-time']
+                #createDate_val = convert_date(createDate.text)
+                createDate_val = createDate
             except:
                 continue
                 #createDate_val = None
@@ -186,11 +188,11 @@ def send_info(cats, url_lists, today):
 
             ##수정일자
             #media_end_head_info_datestamp_time _ARTICLE_MODIFY_DATE_TIME
-            try:
-                modifyDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_MODIFY_DATE_TIME")
-                modifyDate_val = modifyDate.text
-            except:
-                modifyDate_val = None
+            # try:
+            #     modifyDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_MODIFY_DATE_TIME")
+            #     modifyDate_val = modifyDate.text
+            # except:
+            #     modifyDate_val = None
 
 
             ##본문내용
@@ -204,6 +206,9 @@ def send_info(cats, url_lists, today):
                 #brs.findAll("br")
 
                 text_list = cleanText(brs.get_text(strip=True))
+
+                themes_data = count_words_parallel(text_list, words_to_search)
+
                 #for br in brs:
                 #    text_list.append(br.get_text(strip=True))
                 #print(text_list)
@@ -213,29 +218,29 @@ def send_info(cats, url_lists, today):
 
             ##이미지 URL
             #end_photo_org
-            try:
-                img_url_list = []
+            # try:
+            #     img_url_list = []
 
-                urs = soup.findAll(class_="end_photo_org")
-                #print(len(urs))
-                for ur in urs:
-                    img_url_list.append(ur.img['data-src'])
-                #print(img_url_list)
-            except:
-                print(url)
+            #     urs = soup.findAll(class_="end_photo_org")
+            #     #print(len(urs))
+            #     for ur in urs:
+            #         img_url_list.append(ur.img['data-src'])
+            #     #print(img_url_list)
+            # except:
+            #     print(url)
 
             ##작성기자 기자 이메일
             #byline_s
-            try:
-                author_list = []
+            # try:
+            #     author_list = []
 
-                authors = soup.findAll(class_="byline_s")
-                #print(len(authors))
-                for au in authors:
-                    author_list.append(au.text)
-                #print(author_list)
-            except:
-                print(url)
+            #     authors = soup.findAll(class_="byline_s")
+            #     #print(len(authors))
+            #     for au in authors:
+            #         author_list.append(au.text)
+            #     #print(author_list)
+            # except:
+            #     print(url)
 
             # # db연결
             # db_connection = mysql.connector.connect(
@@ -255,75 +260,86 @@ def send_info(cats, url_lists, today):
                     'url': url,
                     'site_name': siteName_val,
                     'title': title_val,
-                    'author_info': ' '.join(author_list),
                     'create_date': createDate_val,
-                    'modify_date': modifyDate_val,
                     'content': text_list,
-                    'image_url': ' '.join(img_url_list)
+                    'themes': themes_data,
                 }
-            producer.send('news_test', value=news_data)
+            producer.send('news_crawling', value=news_data)
 
-
-
-            if modifyDate_val != "":
-                article_data = [
-                    ( cat, url, siteName_val, title_val, str(' '.join(author_list)), createDate_val, modifyDate_val, text_list, str(' '.join(img_url_list))),
-                    # 다른 기사 데이터도 추가
-                    ]
-            else:
-                article_data = [
-                    ( cat, url, siteName_val, title_val, str(' '.join(author_list)), createDate_val, modifyDate_val, text_list, str(' '.join(img_url_list))),
-                    # 다른 기사 데이터도 추가
-                    ]
-            article_query = """
-            INSERT IGNORE INTO Article (category_id, news_url, company_name, title, author_info, create_date, modify_date, content, image_url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-
-
-
-            # cursor.executemany(article_query, article_data)
-            # db_connection.commit()
-
-            # # 연결 종료
-            # cursor.close()
-            # db_connection.close()
 
             last_url[cat] = url
 
-            time.sleep(generate_weighted_random_number(0.8, 2.2))
+            time.sleep(generate_weighted_random_number(0.8, 1.2))
+
+
+def get_thema():
+    # HDFS 클라이언트를 생성합니다.
+    hdfs_client = InsecureClient('http://namenode:9870', user='root')
+
+    # HDFS 경로에서 JSON 파일을 읽어옵니다.
+    hdfs_path = '/thema/themaju.json'
+
+    with hdfs_client.read(hdfs_path) as hdfs_file:
+        # JSON 데이터를 읽어옵니다.
+        json_data = hdfs_file.read()
+
+    # JSON 데이터를 파싱합니다.
+    data = json.loads(json_data.decode('utf-8'))
+
+    return data
 
 
 
-logger.info("코드가 시작됩니다.")
+def count_word(text, word):
+    return word, text.count(word)
 
-while True:
+def count_words_parallel(text, words_to_count):
+    word_counts = {}
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_word = {executor.submit(count_word, text, word): word for word in words_to_count}
+        for future in concurrent.futures.as_completed(future_to_word):
+            word, count = future.result()
+            if count > 0:
+                word_counts[word] = count
 
-    now = datetime.today().strftime('%Y%m%d')
+    return word_counts
 
-    url_lists = {}
-    count = 0
 
-    if today == now:
+
+if __name__ == "__main__":
+    logger.info("코드가 시작됩니다.")
+
+    ##오늘날짜얻기
+    today = datetime.today().strftime('%Y%m%d')
+
+
+    cats = [100, 101, 102, 103 ,104, 105]
+    last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
+
+    tema = get_thema()
+    words_to_search = list(tema.keys())
+
+    while True:
+
+        now = datetime.today().strftime('%Y%m%d')
+
+        url_lists = {}
+        count = 0
+
+        if crawling_first == True:
+            re = 1
+        else:
+            re = 10000
+
+
         for cat in tqdm(cats):
-            url_lists[cat] = make_urllist(cat, today)
+            url_lists[cat] = make_urllist(cat, today, re)
             count += len(url_lists[cat])
         logger.info(f"found new url : {count}")
-        send_info(cats, url_lists, today)
+        send_info(cats, url_lists, today, words_to_search)
 
-    else:
-        for cat in tqdm(cats):
-            url_lists[cat] = make_urllist(cat, today)
-            count += len(url_lists[cat])
-        logger.info(f"last found new url : {count}")
-        send_info(cats, url_lists, today)
-
-        today = now
-        last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
-        create_csv(cats, today)
-
-
-    time.sleep(10)
+        crawling_first == False
+        time.sleep(5)
 
 
 
