@@ -58,17 +58,6 @@ crawling_first = True
 def cleanText(readData):
   return re.sub(" {2,}", ' ', re.sub("[^\w\s\t\n\v\f\r]", '', readData))
 
-def convert_date(kr_date_str):
-    # "2023.10.13. 오후 1:09" --> "2023-10-13 13:09"
-    date_str, am_pm, time_str = kr_date_str.split()
-    hour, minute = map(int, time_str.split(':'))
-
-    if am_pm == "오후" and hour < 12:
-        hour += 12
-    elif am_pm == '오전' and hour == 12:
-        hour = 0
-
-    return f"{date_str.replace('.', '-')} {hour:02d}:{minute:02d}:00"
 
 def generate_weighted_random_number(min, max):
     # 0.5에서 1.5 사이에서 소수점 둘째 자리까지 랜덤 숫자 생성
@@ -304,17 +293,15 @@ def count_words_parallel(text, words_to_count):
 
     return word_counts
 
+cats = [100, 101, 102, 103 ,104, 105]
+last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
 
+##오늘날짜얻기
+today = datetime.today().strftime('%Y%m%d')
 
 if __name__ == "__main__":
     logger.info("코드가 시작됩니다.")
 
-    ##오늘날짜얻기
-    today = datetime.today().strftime('%Y%m%d')
-
-
-    cats = [100, 101, 102, 103 ,104, 105]
-    last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
 
     tema = get_thema()
     words_to_search = list(tema.keys())
