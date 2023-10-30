@@ -258,7 +258,7 @@ def send_info(cats, url_lists, today, words_to_search):
                     'content': text_list,
                     'themes': themes_data,
                 }
-            producer.send('news_test3', value=news_data)
+            producer.send('news_crawling', value=news_data)
 
 
 
