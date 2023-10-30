@@ -1,18 +1,18 @@
 from kafka import KafkaProducer
-import json 
 import time
-import logging
 import requests
 from bs4 import BeautifulSoup
+import json
 import pandas as pd
 from datetime import datetime
+import time
 import os
 from tqdm import tqdm
 import re
 import random
-from hdfs import InsecureClient
-import pandas as pd
 import concurrent.futures
+from hdfs import InsecureClient
+import logging
 
 
 producer = KafkaProducer(acks=0,
@@ -22,19 +22,19 @@ producer = KafkaProducer(acks=0,
                           api_version=(2,)
                          )
 
-
 # 로그 생성
 logger = logging.getLogger()
+
 # 로그의 출력 기준 설정
 logger.setLevel(logging.INFO)
+
 # log 출력 형식
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 # log를 console에 출력
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
-
-
 
 """
 100 : 정치
@@ -46,6 +46,13 @@ logger.addHandler(stream_handler)
 """
 
 
+##오늘날짜얻기
+today = datetime.today().strftime('%Y%m%d')
+#print(today)
+
+cats = [100, 101, 102, 103 ,104, 105]
+last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
+
 ##data 폴더 생성
 try:
     if not os.path.exists("data"):
@@ -53,7 +60,6 @@ try:
 except OSError:
     logger.info('Error: Creating directory. ' +  "data")
 
-crawling_first = True
 
 def cleanText(readData):
   return re.sub(" {2,}", ' ', re.sub("[^\w\s\t\n\v\f\r]", '', readData))
@@ -72,7 +78,7 @@ def generate_weighted_random_number(min, max):
         else:
             return 3
 
-def make_urllist(cat, date, re):
+def make_urllist(cat, date, repeat):
     global last_url
     page_num = 0
     first_url = ""
@@ -80,7 +86,7 @@ def make_urllist(cat, date, re):
     first_flag = 0
     last_flag = 0
 
-    for i in range(re):
+    for i in range(repeat):
         url = 'https://news.naver.com/main/list.nhn?mode=LSD&mid=sec&sid1='+str(cat)+'&date='+str(date)+'&page='+str(i+1)
         headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.90 Safari/537.36'}
         news = requests.get(url, headers=headers)
@@ -167,9 +173,8 @@ def send_info(cats, url_lists, today, words_to_search):
             ##작성일자
             #media_end_head_info_datestamp_time _ARTICLE_DATE_TIME
             try:
-                createDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME")['data-date-time']
-                #createDate_val = convert_date(createDate.text)
-                createDate_val = createDate
+                createDate = soup.find(class_="media_end_head_info_datestamp_time _ARTICLE_DATE_TIME")
+                createDate_val = createDate.text
             except:
                 continue
                 #createDate_val = None
@@ -197,7 +202,6 @@ def send_info(cats, url_lists, today, words_to_search):
                 text_list = cleanText(brs.get_text(strip=True))
 
                 themes_data = count_words_parallel(text_list, words_to_search)
-
                 #for br in brs:
                 #    text_list.append(br.get_text(strip=True))
                 #print(text_list)
@@ -253,12 +257,14 @@ def send_info(cats, url_lists, today, words_to_search):
                     'content': text_list,
                     'themes': themes_data,
                 }
-            producer.send('news_crawling', value=news_data)
+            producer.send('news_test3', value=news_data)
+
 
 
             last_url[cat] = url
 
             time.sleep(generate_weighted_random_number(0.8, 1.2))
+
 
 
 def get_thema():
@@ -277,8 +283,6 @@ def get_thema():
 
     return data
 
-
-
 def count_word(text, word):
     return word, text.count(word)
 
@@ -293,42 +297,38 @@ def count_words_parallel(text, words_to_count):
 
     return word_counts
 
-cats = [100, 101, 102, 103 ,104, 105]
-last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
-
-##오늘날짜얻기
-today = datetime.today().strftime('%Y%m%d')
 
 if __name__ == "__main__":
     logger.info("코드가 시작됩니다.")
 
-
     tema = get_thema()
     words_to_search = list(tema.keys())
+
+    crawling_first = True
+
+    repeat = 0
+
 
     while True:
 
         now = datetime.today().strftime('%Y%m%d')
 
+        if crawling_first == True:
+            repeat = 1
+        else:
+            repeat = 10000
+
+
         url_lists = {}
         count = 0
 
-        if crawling_first == True:
-            re = 1
-        else:
-            re = 10000
-
-
         for cat in tqdm(cats):
-            url_lists[cat] = make_urllist(cat, today, re)
+            url_lists[cat] = make_urllist(cat, today, repeat)
             count += len(url_lists[cat])
         logger.info(f"found new url : {count}")
         send_info(cats, url_lists, today, words_to_search)
 
-        crawling_first == False
+
+        crawling_first = False
         time.sleep(5)
-
-
-
-
 
