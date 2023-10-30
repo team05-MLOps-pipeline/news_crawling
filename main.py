@@ -45,14 +45,6 @@ logger.addHandler(stream_handler)
 105 : IT/과학
 """
 
-
-##오늘날짜얻기
-today = datetime.today().strftime('%Y%m%d')
-#print(today)
-
-cats = [100, 101, 102, 103 ,104, 105]
-last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
-
 ##data 폴더 생성
 try:
     if not os.path.exists("data"):
@@ -301,6 +293,13 @@ def count_words_parallel(text, words_to_count):
 
 if __name__ == "__main__":
     logger.info("코드가 시작됩니다.")
+    
+    ##오늘날짜얻기
+    #today = datetime.today().strftime('%Y%m%d')
+    #print(today)
+
+    cats = [100, 101, 102, 103 ,104, 105]
+    last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
 
     tema = get_thema()
     words_to_search = list(tema.keys())
@@ -312,7 +311,7 @@ if __name__ == "__main__":
 
     while True:
 
-        now = datetime.today().strftime('%Y%m%d')
+        today = datetime.today().strftime('%Y%m%d')
 
         if crawling_first == True:
             repeat = 1
