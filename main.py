@@ -301,14 +301,25 @@ if __name__ == "__main__":
     cats = [100, 101, 102, 103 ,104, 105]
     last_url = {100:"",101:"",102:"",103:"",104:"",105:""}
 
+    #원본
+    # tema = get_thema()
+    # words_to_search = list(tema.keys())
+
     tema = get_thema()
-    words_to_search = list(tema.keys())
+    tema = list(team.values())
+
+    # 빈 리스트 생성
+    words_to_search = []
+
+    # 모든 하위 리스트를 하나의 리스트로 병합
+    for sublist in data:
+        words_to_search.extend(sublist)
+
+
+
 
     crawling_first = True
-
     repeat = 0
-
-
     while True:
 
         today = datetime.today().strftime('%Y%m%d')
