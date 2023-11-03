@@ -312,7 +312,7 @@ if __name__ == "__main__":
     words_to_search = []
 
     # 모든 하위 리스트를 하나의 리스트로 병합
-    for sublist in data:
+    for sublist in tema:
         words_to_search.extend(sublist)
 
 
