@@ -306,7 +306,7 @@ if __name__ == "__main__":
     # words_to_search = list(tema.keys())
 
     tema = get_thema()
-    tema = list(team.values())
+    tema = list(tema.values())
 
     # 빈 리스트 생성
     words_to_search = []
